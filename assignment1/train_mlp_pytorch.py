@@ -28,6 +28,7 @@ from copy import deepcopy
 from tqdm.auto import tqdm
 from mlp_pytorch import MLP
 import cifar10_utils
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -56,6 +57,10 @@ def accuracy(predictions, targets):
     # PUT YOUR CODE HERE  #
     #######################
 
+    #assuming a mistake in the docstring that the labels are 2d as they are not and would require more computation to make them.
+    predicted_labels = torch.argmax(predictions, axis = 1)
+    correct_predictions = predicted_labels == targets
+    accuracy = torch.sum(correct_predictions) / targets.shape[0]
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -83,7 +88,17 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    avg_accuracy = 0
+    for data, targets in data_loader:
+        data, targets = data.to(device), targets.to(device)
+        data = data.reshape(data.shape[0], 3*32*32)
+        predictions = model(data)
+        acc = accuracy(predictions, targets)
+        avg_accuracy += acc * data.shape[0]
+    
+    avg_accuracy /= len(data_loader.dataset)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -130,7 +145,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     if torch.cuda.is_available():  # GPU operation have separate seed
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.determinstic = True
+        torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
     # Set default device
@@ -145,16 +160,58 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     # PUT YOUR CODE HERE  #
     #######################
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
+    #Initialization:
+    model = MLP(3*32*32, hidden_dims, 10, use_batch_norm=use_batch_norm)
+    loss_module = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+
+    val_accuracies = torch.zeros((epochs,), dtype=torch.float32)
+    train_losses = torch.zeros((epochs,), dtype=torch.float32)
+    best_val_accuracy = 0.0
+    best_model = None
+
+    # Moving the model to device:
+    model.to(device)
+    model.train()
+
+    # Training Loop:
+    for epoch in tqdm(range(epochs)):
+        running_train_loss = 0.0
+
+        model.train()
+        for X_batch, y_batch in cifar10_loader["train"]:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            
+            #Reshaping the input to fit:
+            X_batch = X_batch.reshape(X_batch.shape[0], 3*32*32)
+            preds = model(X_batch)
+            
+            loss = loss_module(preds, y_batch)
+            running_train_loss += loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        
+        train_losses[epoch] = (running_train_loss / len(cifar10_loader["train"])).item()
+        
+        # Evaluating on the evaluation set:
+        model.eval()
+        with torch.no_grad():
+            val_acc = evaluate_model(model, cifar10_loader["validation"])
+            val_accuracies[epoch] = val_acc.item()
+
+            if val_acc > best_val_accuracy:
+              best_val_accuracy = val_acc
+              best_model = deepcopy(model)
+
     # TODO: Test best model
-    test_accuracy = ...
+    model = best_model
+    with torch.no_grad():
+        model.eval()
+        test_accuracy = evaluate_model(model, cifar10_loader["test"])
     # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    logging_dict = {"train_losses" : train_losses}
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -189,5 +246,32 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
+    model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
+    
+    print(f"Test accuracy of best_model: {test_accuracy}")
+# Plot code:
+epochs = len(val_accuracies)
+plt.figure(figsize=(12, 6))
+
+# Plotting the training loss
+plt.subplot(1, 2, 1)
+plt.plot(range(1, epochs + 1),logging_dict["train_losses"], color='blue')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training loss Over Epochs')
+plt.grid(True)
+
+# Plotting the validation accuracy
+plt.subplot(1, 2, 2)
+plt.plot(range(1, epochs + 1), val_accuracies, color='green')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.title('Validation accuracy Over Epochs')
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
+
+

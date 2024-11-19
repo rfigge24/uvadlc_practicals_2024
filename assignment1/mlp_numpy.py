@@ -22,7 +22,7 @@ from __future__ import division
 from __future__ import print_function
 
 from modules import *
-
+from functools import reduce
 
 class MLP(object):
     """
@@ -52,7 +52,17 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        alpha = 1
+        layer_out_units = n_hidden + [n_classes]
+
+        self.layers = []
+        self.layers.append(LinearModule(n_inputs, layer_out_units[0], input_layer=True))
+        for i in range(1,len(layer_out_units)):
+            self.layers.append(ELUModule(alpha))
+            self.layers.append(LinearModule(layer_out_units[i-1], layer_out_units[i]))
+        self.layers.append(SoftMaxModule())
+
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -74,7 +84,8 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        out = reduce(lambda inp, layer: layer.forward(inp), self.layers, x)
+        
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -95,7 +106,8 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        reduce(lambda grad_out, layer: layer.backward(grad_out), list(reversed(self.layers)), dout)
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -112,7 +124,8 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        for layer in self.layers:
+            layer.clear_cache()
         #######################
         # END OF YOUR CODE    #
         #######################

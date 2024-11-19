@@ -29,6 +29,7 @@ from copy import deepcopy
 from mlp_numpy import MLP
 from modules import CrossEntropyModule
 import cifar10_utils
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -53,7 +54,9 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    predicted_labels = np.argmax(predictions, axis = 1)
+    correct_predictions = predicted_labels == targets
+    accuracy = np.sum(correct_predictions) / len(targets)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -81,7 +84,14 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    accuracy_sum = 0
+    for data, targets in data_loader:
+        data = data.reshape(data.shape[0], 3*32*32)
+        predictions = model.forward(data)
+        acc = accuracy(predictions, targets)
+        accuracy_sum += acc * data.shape[0]
 
+    avg_accuracy = accuracy_sum / len(data_loader.dataset)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -135,14 +145,45 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     #######################
 
     # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
+    model = MLP(3*32*32,hidden_dims,10)
+    loss_module = CrossEntropyModule()
     # TODO: Training loop including validation
-    val_accuracies = ...
+    val_accuracies = np.zeros(epochs)
+    train_losses = np.zeros(epochs)
+    best_val_accuracy = 0
+    best_model = None
+    for epoch in tqdm(range(epochs)):
+        train_loss=0
+        for train_data, train_targets in cifar10_loader["train"]:
+            train_data = train_data.reshape(train_data.shape[0], 3*32*32)
+            out = model.forward(train_data)
+
+            batch_loss = loss_module.forward(out, train_targets)
+            train_loss += batch_loss
+
+            dout = loss_module.backward(out, train_targets)
+            model.backward(dout)
+
+            for layer in model.layers:
+                if hasattr(layer, "grads"):
+                    layer.params["weight"] -= lr * layer.grads["weight"]
+                    layer.params["bias"] -= lr * layer.grads["bias"]
+
+        model.clear_cache()        
+        train_losses[epoch] = train_loss / len(cifar10_loader["train"])
+        
+        val_acc = evaluate_model(model,cifar10_loader["validation"])
+        val_accuracies[epoch] = val_acc
+
+        if val_acc > best_val_accuracy:
+            best_val_accuracy = val_acc
+            best_model = deepcopy(model)
+
     # TODO: Test best model
-    test_accuracy = ...
+    model = best_model
+    test_accuracy = evaluate_model(model, cifar10_loader['test'])
     # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    logging_dict = {"train_losses" : train_losses}
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -175,5 +216,31 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
+model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
+
+
+print(f"Test accuracy of best_model: {test_accuracy}")
+# Plot code:
+epochs = len(val_accuracies)
+plt.figure(figsize=(12, 6))
+
+# Plotting the training loss
+plt.subplot(1, 2, 1)
+plt.plot(range(1, epochs + 1),logging_dict["train_losses"], color='blue')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training loss Over Epochs')
+plt.grid(True)
+
+# Plotting the validation accuracy
+plt.subplot(1, 2, 2)
+plt.plot(range(1, epochs + 1), val_accuracies, color='green')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.title('Validation accuracy Over Epochs')
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
