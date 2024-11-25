@@ -223,7 +223,7 @@ class TransformerDecoderBlock(nn.Module):
         residual = x
         att = self.self_attention(self.layer_norm_1(x))
         residual = residual + att
-        mlp = self.mlpf(self.layer_norm_2(out))
+        mlp = self.mlpf(self.layer_norm_2(residual))
         out = residual + mlp
 
         return out
