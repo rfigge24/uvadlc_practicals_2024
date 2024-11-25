@@ -210,7 +210,7 @@ class TransformerDecoderBlock(nn.Module):
         self.layer_norm_2 = RMSNorm(dim=config.n_embd)
         self.mlpf = nn.Sequential(
             nn.Linear(in_features=config.n_embd, out_features=4*config.n_embd),
-            BERTGELU(inplace=True),
+            BERTGELU(),
             nn.Linear(in_features=4*config.n_embd, out_features=config.n_embd),
             nn.Dropout(config.resid_pdrop),
         )
