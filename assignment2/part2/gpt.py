@@ -446,7 +446,7 @@ class GPT(nn.Module):
             h = block(h)
         # Apply final layer normalization and linear layer to produce logits
         logits = self.lm_head(self.transformer.ln_f(h))
-
+        print("hoi")
         return logits
 
     @torch.inference_mode()
