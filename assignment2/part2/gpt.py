@@ -166,7 +166,7 @@ class CausalSelfAttention(nn.Module):
             att_logits /= math.sqrt(head_dim)
 
             # Apply causal mask
-            att_logits = att_logits.masked_fill(self.mask == 0, -9e15)
+            att_logits = att_logits.masked_fill(self.mask == 0, float('-inf'))
             # Using softmax to get the attention weights:
             att = F.softmax(att_logits, dim=-1)
             # Applying dropout to the attention weights:
