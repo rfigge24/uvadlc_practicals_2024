@@ -112,7 +112,7 @@ class CausalSelfAttention(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Tuple containing the modified query and key tensors.
         """
         # Generate RoPE embeddings dynamically based on T
-        seq_pos = torch.arange(0, T, device=xq.device, dtype=xq.dtype) # Shape: (T)
+        seq_pos = torch.arange(0, T) # Shape: (T)
         head_dim = self.n_embd // self.n_head
         assert(head_dim % 2 == 0)
 
